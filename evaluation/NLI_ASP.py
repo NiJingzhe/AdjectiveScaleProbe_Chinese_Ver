@@ -1,10 +1,6 @@
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, default_data_collator
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
-from collections import Counter
-import csv
-import pandas as pd
 import os
 os.chdir('/path/to/work_dir')
 from torch.utils.data import DataLoader
