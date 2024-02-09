@@ -19,7 +19,7 @@ def print_and_clear(text : str):
 	sys.stdout.flush()
 	
 
-def call_qwen_api(model_name : str, prompt : str):
+def call_api(model_name : str, prompt : str, show_respons=False):
 	response = dashscope.Generation.call(
 		model=model_name,
 		prompt=prompt
@@ -28,10 +28,13 @@ def call_qwen_api(model_name : str, prompt : str):
 	# otherwise indicate request is failed, you can get error code
 	# and message from code and message.
 	if response.status_code == HTTPStatus.OK:
+		if show_respons:
+			print(response.output.text)
 		return response.output.text
 	else:
-		print(response.code)  # The error code.
-		print(response.message)  # The error message.
+		if show_respons:
+			print(response.code)  # The error code.
+			print(response.message)  # The error message.
 		return -1
 
 def merge_dict(dic_a,dic_b):

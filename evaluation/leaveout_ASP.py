@@ -2,12 +2,13 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer, Auto
 import torch
 import numpy as np
 import os
-os.chdir('../')
-from torch.utils.data import DataLoader
+import sys
+import time
+sys.path.append('../')
 from ASP_utils import *
+from torch.utils.data import DataLoader
 from natsort import natsorted
 import argparse
-
 
 def parse_args():
 	parser = argparse.ArgumentParser(description="Data evaluation for the ASP.")
@@ -23,6 +24,8 @@ def parse_args():
 	return args
 
 if __name__ == '__main__':
+	os.chdir('../')
+
 	task = 'mnli'
 	args = parse_args()
 	print(args)
@@ -43,21 +46,31 @@ if __name__ == '__main__':
 
  
 	num_labels = 3
-	list_path = f"/model/API_model/"
+	list_path = "./model/API_model/"
 	model_list = os.listdir(list_path)
 	
 	if test_type == 'api':
+
+		mapping_dict = {
+			"entailment" : 0,
+			"not_entailment" : 1,
+			"discard" : -2
+		}
 		
 		for model_name in model_list:
+
+			if len(model_name.split('|')) > 1 and model_name.split('|')[1] == "skip":
+				continue
+
 			print("\n\n")
 			print("%"*100)
 			print(f'now turn to the {model_name}:')
 			
 			nli_classes = ['entailment','not_entailment']
-			dev_path = "/data/Entailment/"
+			dev_path = "./data/EntailmentInference/"
 			task_list = os.listdir(dev_path)
 
-			save_path = f'/result/EntailmentInference/{model_name}'
+			save_path = f'./result/EntailmentInference/'
 			# 判断save path是否存在，不存在则创建这个目录
 			createDir(save_path)
 
@@ -72,24 +85,35 @@ if __name__ == '__main__':
 				dataset = APIuseDataset({"premise" : dev_premise, "hypothesis": dev_hypo}, dev_label)
 				dataloader = DataLoader(dataset, batch_size=128, shuffle=False)
 
+				pred_scale = []
 				for step, batch in enumerate(dataloader):
 					
 					print("\n", "=="*50)
-					print(f"in {step} step, batch size: {len(batch['premise'])}")
+					print(f"in {step+1}/{len(dev_label)//128 + 1} steps, batch size: {len(batch['premise'])}")
 
-					pred_scale = []
+					
 					for i in range(len(batch['premise'])):
-						prompt = f'Premise: {batch["premise"][i]} \nHypothesis: {batch["hypothesis"][i]} \n请问Premise和Hypothesis的关系是？只回答 entailment / not-entailment\n不要有多余回答'
-						pred_scale.append(call_qwen_api(model_name, prompt))
+						prompt = f'Premise: {batch["premise"][i]}\nHypothesis: {batch["hypothesis"][i]}\n则Premise和Hypothesis的关系是？\n务必只回答: "entailment" 或 "not_entailment"'
+						pred = call_api(model_name, prompt, show_respons=True)
+						while pred == -1:
+							time.sleep(5)
+							pred = call_api(model_name, prompt, show_respons=True)
+						
+						if not pred.startswith("ent"):
+							pred = "not_entailment"
+						if pred.startswith("ent"):
+							pred = "entailment"
 
-						print_and_clear(f"progress: {i}/128")
+						print(pred)
+
+						pred_scale.append(mapping_dict[pred])
+
+						print_and_clear(f"progress: {i+1}/{len(batch['premise'])}")
 
 				result_accuracy = accuracy_score(pred_scale, dev_label)
 
-				with open(save_path+task+".txt", "w") as f:
-					f.write(str(result_accuracy))
-					f.close()
-
+				with open(f"{save_path}/{model_name}.txt", "a") as f:
+					f.write(f"{task[:-4]}: {str(result_accuracy)}\n")
 
 
 
