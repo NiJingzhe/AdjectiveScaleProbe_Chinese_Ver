@@ -67,10 +67,10 @@ if __name__ == '__main__':
 			print(f'now turn to the {model_name}:')
 			
 			nli_classes = ['entailment','not_entailment']
-			dev_path = "./data/EntailmentInference/"
+			dev_path = "./data/EntailmentInference-Chinese/"
 			task_list = os.listdir(dev_path)
 
-			save_path = f'./result/EntailmentInference/'
+			save_path = f'./result/EntailmentInference-Chinese/'
 			# 判断save path是否存在，不存在则创建这个目录
 			createDir(save_path)
 
@@ -94,17 +94,17 @@ if __name__ == '__main__':
 					
 					for i in range(len(batch['premise'])):
 						prompt = f'Premise: {batch["premise"][i]}\nHypothesis: {batch["hypothesis"][i]}\n则Premise和Hypothesis的关系是？\n务必只回答: "entailment" 或 "not_entailment"'
-						pred = call_api(model_name, prompt, show_respons=True)
+						pred = call_api(model_name, prompt, show_respons=False)
 						while pred == -1:
 							time.sleep(5)
-							pred = call_api(model_name, prompt, show_respons=True)
+							pred = call_api(model_name, prompt, show_respons=False)
 						
 						if not pred.startswith("ent"):
 							pred = "not_entailment"
 						if pred.startswith("ent"):
 							pred = "entailment"
 
-						print(pred)
+						#print(pred)
 
 						pred_scale.append(mapping_dict[pred])
 

@@ -115,6 +115,30 @@ def read_scale_data(path,p_id=0,h_id=1, l_id=2):
 			labels.append(label)
 	return premise,hypothesis,labels
 
+def write_scale_data(premise_list, hypothesis_list, label_list, path):
+	"""
+	将前提、假设和标签写入文件
+	Args:
+		premise_list (List): 前提列表
+		hypothesis_list (List): 假设列表
+		label_list (List): 标签列表
+		path (str): 文件路径
+	"""
+	with open(path,'w') as f:
+		f.write('premise\thypothesis\tlabel\n')
+		writer = csv.writer(f, delimiter='\t')
+		for i in range(len(premise_list)):
+			label = ""
+			if label_list[i] == -2:
+				continue
+			elif label_list[i] == 0:
+				label = 'entailment'
+			elif label_list[i] == 1:
+				label = 'not_entailment'
+			writer.writerow([premise_list[i],hypothesis_list[i],label])
+
+		f.close()
+
 # 专门用于API测试的数据集定义
 class APIuseDataset(torch.utils.data.Dataset):
 

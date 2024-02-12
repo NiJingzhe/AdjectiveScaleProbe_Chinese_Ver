@@ -1,0 +1,5 @@
+argument: 0.799
+dimension: 0.8428428428428428
+negation: 0.6636636636636637
+superlative: 0.6596596596596597
+comparative: 0.533
