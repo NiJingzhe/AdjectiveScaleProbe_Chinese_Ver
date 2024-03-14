@@ -15,11 +15,14 @@ import dashscope
 import sys
 
 def print_and_clear(text : str):
-	sys.stdout.write('\r'+text)
+	sys.stdout.write('\r'+text+" "*30)
 	sys.stdout.flush()
 	
 
 def call_api(model_name : str, prompt : str, show_respons=False):
+    
+	dashscope.api_key = "sk-4b912350665f42e3a1fad64e172cb90f"
+    
 	response = dashscope.Generation.call(
 		model=model_name,
 		prompt=prompt
@@ -32,9 +35,9 @@ def call_api(model_name : str, prompt : str, show_respons=False):
 			print(response.output.text)
 		return response.output.text
 	else:
-		if show_respons:
-			print(response.code)  # The error code.
-			print(response.message)  # The error message.
+		#if show_respons:
+		#	print(response.code)  # The error code.
+		#	print(response.message)  # The error message.
 		return -1
 
 def merge_dict(dic_a,dic_b):
@@ -101,6 +104,7 @@ def read_scale_data(path,p_id=0,h_id=1, l_id=2):
 		for row in rows:
 			row = row.strip()
 			text = row.split('\t')
+			#print(text)
 			premise.append(text[p_id])
 			hypothesis.append(text[h_id])
 			if text[l_id] == 'entailment':
@@ -124,7 +128,7 @@ def write_scale_data(premise_list, hypothesis_list, label_list, path):
 		label_list (List): 标签列表
 		path (str): 文件路径
 	"""
-	with open(path,'w') as f:
+	with open(path,"w") as f:
 		f.write('premise\thypothesis\tlabel\n')
 		writer = csv.writer(f, delimiter='\t')
 		for i in range(len(premise_list)):

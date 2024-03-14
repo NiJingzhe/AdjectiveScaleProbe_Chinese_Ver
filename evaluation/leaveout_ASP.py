@@ -10,237 +10,320 @@ from torch.utils.data import DataLoader
 from natsort import natsorted
 import argparse
 
-def parse_args():
-	parser = argparse.ArgumentParser(description="Data evaluation for the ASP.")
-	parser.add_argument(
-		"--test_type",
-		type=str,
-		default='test',
-		required = True,
-		help = "candidate: [test, swap_n, swap_a, swap_s, wider, api]"
-	)
-	args = parser.parse_args()
+# 67720
 
-	return args
+def parse_args():
+    parser = argparse.ArgumentParser(description="Data evaluation for the ASP.")
+    parser.add_argument(
+        "--test_type",
+        type=str,
+        default='test',
+        required = True,
+        help = "candidate: [test, swap_n, swap_a, swap_s, wider, api]"
+    )
+    args = parser.parse_args()
+
+    return args
 
 if __name__ == '__main__':
-	os.chdir('../')
+    os.chdir('../')
 
-	task = 'mnli'
-	args = parse_args()
-	print(args)
+    task = 'mnli'
+    args = parse_args()
+    print(args)
 
-	test_type = args.test_type
-	swap_flag = False
-	inv_flag = False
-	sample_type = 'test'
-	if test_type == 'wider':
-		sample_type = test_type
-	elif test_type == 'swap_n':
-		inv_flag = True
-	elif test_type == 'swap_s':
-		swap_flag = True
-	elif test_type == 'swap_a':
-		inv_flag = True
-		swap_flag = True
+    test_type = args.test_type
+    swap_flag = False
+    inv_flag = False
+    sample_type = 'test'
+    if test_type == 'wider':
+        sample_type = test_type
+    elif test_type == 'swap_n':
+        inv_flag = True
+    elif test_type == 'swap_s':
+        swap_flag = True
+    elif test_type == 'swap_a':
+        inv_flag = True
+        swap_flag = True
 
  
-	num_labels = 3
-	list_path = "./model/API_model/"
-	model_list = os.listdir(list_path)
-	
-	if test_type == 'api':
+    num_labels = 3
+    list_path = "./model/API_model/"
+    model_list = os.listdir(list_path)
+    
+    if test_type == 'api':
 
-		mapping_dict = {
-			"entailment" : 0,
-			"not_entailment" : 1,
-			"discard" : -2
-		}
-		
-		for model_name in model_list:
+        mapping_dict = {
+            "entailment" : 0,
+            "not_entailment" : 1,
+            "discard" : -2
+        }
+        
+        for model_name in model_list:
 
-			if len(model_name.split('|')) > 1 and model_name.split('|')[1] == "skip":
-				continue
+            if len(model_name.split('|')) > 1 and model_name.split('|')[1] == "skip":
+                continue
 
-			print("\n\n")
-			print("%"*100)
-			print(f'now turn to the {model_name}:')
-			
-			nli_classes = ['entailment','not_entailment']
-			dev_path = "./data/EntailmentInference-Chinese/"
-			task_list = os.listdir(dev_path)
+            print("\n\n")
+            print("%"*100)
+            print(f'now turn to the {model_name}:')
+            
+            nli_classes = ['entailment','not_entailment']
+            dev_path = "./data/EntailmentInference_Chinese/"
+            task_list = os.listdir(dev_path)
 
-			save_path = f'./result/EntailmentInference-Chinese/'
-			# 判断save path是否存在，不存在则创建这个目录
-			createDir(save_path)
+            save_path = f'./result/EntailmentInference_Chinese/'
+            # 判断save path是否存在，不存在则创建这个目录
+            createDir(save_path)
 
-			for task in task_list:
+            for task in task_list:
+                
+                history_id = -1
+                history_step = -1   
+                history_pred_scale = []
+                finished_task_list = []
 
-				dev_premise, dev_hypo, dev_label = read_scale_data(f'{dev_path}/{task}',p_id=0,h_id=1, l_id=2)
+                if not os.path.exists(f"{save_path}/{model_name}.progress"):
+                    with open(f"{save_path}/{model_name}.progress", "w") as f:
+                        f.write("0\n0")
+                        f.close()
+                else:
+                    with open(f"{save_path}/{model_name}.progress", "r") as f:
+                        history_step = int(f.readline().strip())
+                        history_id = int(f.readline().strip())
 
-				print(f"test dataset: {task}, from {dev_path}")
-				print(f"test model : {model_name}")
-				print(f"save to: {save_path}")
-				
-				dataset = APIuseDataset({"premise" : dev_premise, "hypothesis": dev_hypo}, dev_label)
-				dataloader = DataLoader(dataset, batch_size=128, shuffle=False)
+                        line = f.readline()
+                        while line:
+                            if len(line) > 1 and line.find(".") != -1:
+                               finished_task_list.append(line.strip())
+                            elif line != '\n':
+                               history_pred_scale.append(int(line.strip()))
+                            
+                            line = f.readline()
+                
+                if task in finished_task_list:
+                    continue
 
-				pred_scale = []
-				for step, batch in enumerate(dataloader):
-					
-					print("\n", "=="*50)
-					print(f"in {step+1}/{len(dev_label)//128 + 1} steps, batch size: {len(batch['premise'])}")
+                pred_scale = history_pred_scale
+                print(pred_scale)
+                print(finished_task_list)
+                
+                print(f"\nthe length of pred_scale is now: {len(pred_scale)}")
 
-					
-					for i in range(len(batch['premise'])):
-						prompt = f'Premise: {batch["premise"][i]}\nHypothesis: {batch["hypothesis"][i]}\n则Premise和Hypothesis的关系是？\n务必只回答: "entailment" 或 "not_entailment"'
-						pred = call_api(model_name, prompt, show_respons=False)
-						while pred == -1:
-							time.sleep(5)
-							pred = call_api(model_name, prompt, show_respons=False)
-						
-						if not pred.startswith("ent"):
-							pred = "not_entailment"
-						if pred.startswith("ent"):
-							pred = "entailment"
+                dev_premise, dev_hypo, dev_label = read_scale_data(f'{dev_path}/{task}',p_id=0,h_id=1, l_id=2)
 
-						#print(pred)
+                print(f"test dataset: {task}, from {dev_path}")
+                print(f"test model : {model_name}")
+                print(f"save to: {save_path}")
+                
+                dataset = APIuseDataset({"premise" : dev_premise, "hypothesis": dev_hypo}, dev_label)
+                dataloader = DataLoader(dataset, batch_size=128, shuffle=False)
 
-						pred_scale.append(mapping_dict[pred])
+                for step, batch in enumerate(dataloader):
+        
+                    if history_step != -1 and step < history_step:
+                        continue
+                    
+                    print("\n", "=="*50)
+                    print(f"in {step+1}/{len(dev_label)//128 + 1} steps, batch size: {len(batch['premise'])}")
 
-						print_and_clear(f"progress: {i+1}/{len(batch['premise'])}")
+                    
+                    for i in range(len(batch['premise'])):
+         
+                        if history_id != -1 and i < history_id:
+                            continue    
+         
+                        prompt = f'Premise: {batch["premise"][i]}\nHypothesis: {batch["hypothesis"][i]}\n则Premise和Hypothesis的关系是？\n务必只回答: "entailment" 或 "not_entailment"'
+                        pred = call_api(model_name, prompt, show_respons=False)
+      
+                        timeout = 5
+                        while pred == -1 and timeout > 0:
+                            time.sleep(5)
+                            pred = call_api(model_name, prompt, show_respons=False)
+                            timeout -= 1
+       
+                        #if pred == -1 and timeout == 0:
+                        #    print(f"API call failed for {prompt}")
+                        #    print("Waiting for 5 minutes")
+                        #    time.sleep(300)
+                        
+                        #pred = call_api(model_name, prompt, show_respons=False)
+      
+                        #timeout = 5
+                        #while pred == -1 and timeout > 0:
+                        #    time.sleep(5)
+                        #    pred = call_api(model_name, prompt, show_respons=False)
+                        #    timeout -= 1
+       
+                        if pred == -1 and timeout == 0:
+                            print(f"API call failed for {prompt}")
+                            pred = "discard"
+                        
+                        if not pred.startswith("ent"):
+                            if pred == "discard":
+                                pass
+                            else:
+                                pred = "not_entailment"
+                        if pred.startswith("ent"):
+                            pred = "entailment"
 
-				result_accuracy = accuracy_score(pred_scale, dev_label)
+                        #print(pred)
 
-				with open(f"{save_path}/{model_name}.txt", "a") as f:
-					f.write(f"{task[:-4]}: {str(result_accuracy)}\n")
+                        pred_scale.append(mapping_dict[pred])
+      
+                        with open(f"{save_path}/{model_name}.progress", "w") as f:
+                            f.write(f"{step}\n{i}")
+                            for finished_task in finished_task_list:
+                                f.write('\n'+finished_task)
+                            for p in pred_scale:
+                                f.write("\n"+str(p))
+                            f.close()
+    
+
+                        print_and_clear(f"progress: {i+1}/{len(batch['premise'])}")
+      
+
+                result_accuracy = accuracy_score(pred_scale, dev_label)
+                finished_task_list.append(task)
+                
+                print(finished_task_list)
+
+                with open(f"{save_path}/{model_name}.txt", "a") as f:
+                    f.write(f"{task[:-4]}: {result_accuracy:.3f}\n")
+        
+                with open(f"{save_path}/{model_name}.progress", "w") as f:
+                    f.write(f"0\n0")
+                    for finished_task in finished_task_list:
+                        f.write('\n'+finished_task)
+                    f.close() 
+     
+            try:
+                os.remove(f"{save_path}/{model_name}.progress")
+            except:
+                raise FileExistsError("progress file not exists!")
+
+        
+    else:
+        for model_name in model_list:
 
 
+            print("\n\n")
+            print("%"*100)
+            print(f'now turn to the {model_name}:')
+            model_path = f'{list_path}/{model_name}'
+            config = AutoConfig.from_pretrained(model_path, num_labels=num_labels, finetuning_task=task)
+            tokenizer = AutoTokenizer.from_pretrained(model_path,use_fast=True)
 
-			
+            model_mnli = AutoModelForSequenceClassification.from_pretrained(model_path, config=config)
+            torch.cuda.set_device(0)
+            device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+            model_mnli.to(device)
+            model_type = model_name.split("/")[0]
+            leaveout_list = model_type.split('-')[-3:-1]
+            
+            for leaveout_type in leaveout_list:
+                if "ei" in leaveout_type and test_type != 'test':
+                    continue
 
-		
-	else:
-		for model_name in model_list:
+                try:
+                    data_path = f'/data/ASP_fine-tuning/{sample_type}/{leaveout_type}'
+                    dir_list = os.listdir(data_path)
+                except:
+                    continue
 
+                bs_size = 128
+                scale_class = ['entailment','not_entailment']
+                for test_dir in dir_list:
 
-			print("\n\n")
-			print("%"*100)
-			print(f'now turn to the {model_name}:')
-			model_path = f'{list_path}/{model_name}'
-			config = AutoConfig.from_pretrained(model_path, num_labels=num_labels, finetuning_task=task)
-			tokenizer = AutoTokenizer.from_pretrained(model_path,use_fast=True)
+                    if sample_type == 'test':
+                        save_path = f"/result/ASP_model/{model_name}/{test_dir}"
+                        if swap_flag and inv_flag:
+                            save_path += '_sa'
+                        else:
+                            if swap_flag:
+                                save_path += '_ss'
+                            if inv_flag:
+                                save_path += '_sn'   
+                    else:
+                        save_path = f"result/ASP_model/{model_name}/{sample_type}/{test_dir}"
+                    createDir(save_path)
 
-			model_mnli = AutoModelForSequenceClassification.from_pretrained(model_path, config=config)
-			torch.cuda.set_device(0)
-			device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-			model_mnli.to(device)
-			model_type = model_name.split("/")[0]
-			leaveout_list = model_type.split('-')[-3:-1]
-			
-			for leaveout_type in leaveout_list:
-				if "ei" in leaveout_type and test_type != 'test':
-					continue
+                    test_list = os.listdir(f'{data_path}/{test_dir}')
+                    test_list = natsorted(test_list)
+                    for test_type in test_list:
 
-				try:
-					data_path = f'/data/ASP_fine-tuning/{sample_type}/{leaveout_type}'
-					dir_list = os.listdir(data_path)
-				except:
-					continue
+                        print("="*100)
+                        
+                        dev_path = f'{data_path}/{test_dir}/{test_type}'
+                        nli_classes = ['entailment','not_entailment']
+                        dev_premise,dev_hypo, dev_label = read_scale_data(dev_path)
+                        
+                        if swap_flag:
+                            dev_premise_swap = []
+                            for p in dev_premise:
+                                sub_sent = p.split(".")[:-1]
+                                sub_sent.reverse()
+                                sent = ". ".join(sub_sent)+"."
+                                sent = sent.strip()
+                                dev_premise_swap.append(sent)
+                            dev_premise = dev_premise_swap
+                        if inv_flag:
+                            dev_premise_inv = []
+                            for p in dev_premise:
+                                token_list = p.split(" ")
+                                pos_id = None
+                                neg_id = None
+                                for idx, token in enumerate(token_list):
+                                    if re.findall(r"\d+",token):
+                                        if pos_id == None:
+                                            pos_id = idx
+                                        elif neg_id == None:
+                                            neg_id = idx
+                                tmp = token_list[pos_id]
+                                token_list[pos_id] = token_list[neg_id]
+                                token_list[neg_id] = tmp
+                                dev_premise_inv.append(" ".join(token_list))
+                            dev_premise = dev_premise_inv
 
-				bs_size = 128
-				scale_class = ['entailment','not_entailment']
-				for test_dir in dir_list:
+                        print(f"test dataset: {test_type}, from {dev_path}")
+                        print(f"test model from: {model_path}")
+                        print(f"save to: {save_path}")
+                        dev_encoded = tokenizer(dev_premise, dev_hypo, truncation=True, padding='max_length', max_length=128)
+                        dev_dataset = ScaleDataset(dev_encoded,dev_label)
+                        data_loader = DataLoader(dev_dataset,batch_size=bs_size,shuffle=False)  
 
-					if sample_type == 'test':
-						save_path = f"/result/ASP_model/{model_name}/{test_dir}"
-						if swap_flag and inv_flag:
-							save_path += '_sa'
-						else:
-							if swap_flag:
-								save_path += '_ss'
-							if inv_flag:
-								save_path += '_sn'	 
-					else:
-						save_path = f"result/ASP_model/{model_name}/{sample_type}/{test_dir}"
-					createDir(save_path)
+                        acc = 0
+                        pred = []
 
-					test_list = os.listdir(f'{data_path}/{test_dir}')
-					test_list = natsorted(test_list)
-					for test_type in test_list:
+                        for i, batch in enumerate(data_loader):
+                            with torch.no_grad():
+                                input_ids = batch['input_ids'].to(device)
+                                attention_mask = batch['attention_mask'].to(device)
+                                labels = batch['labels'].to(device)
+                                if 'token_type_ids' in batch:
+                                    token_type_ids = batch['token_type_ids'].to(device)
+                                    outputs = model_mnli(input_ids, attention_mask=attention_mask,token_type_ids=token_type_ids)
+                                else:
+                                    outputs = model_mnli(input_ids, attention_mask=attention_mask)
+                                logits = outputs['logits']
+                                output = logits.detach().cpu()
+                                
+                                poss = torch.softmax(output,dim=1).tolist()
+                                pred_batch = np.argmax(poss,axis=1)
 
-						print("="*100)
-						
-						dev_path = f'{data_path}/{test_dir}/{test_type}'
-						nli_classes = ['entailment','not_entailment']
-						dev_premise,dev_hypo, dev_label = read_scale_data(dev_path)
-						
-						if swap_flag:
-							dev_premise_swap = []
-							for p in dev_premise:
-								sub_sent = p.split(".")[:-1]
-								sub_sent.reverse()
-								sent = ". ".join(sub_sent)+"."
-								sent = sent.strip()
-								dev_premise_swap.append(sent)
-							dev_premise = dev_premise_swap
-						if inv_flag:
-							dev_premise_inv = []
-							for p in dev_premise:
-								token_list = p.split(" ")
-								pos_id = None
-								neg_id = None
-								for idx, token in enumerate(token_list):
-									if re.findall(r"\d+",token):
-										if pos_id == None:
-											pos_id = idx
-										elif neg_id == None:
-											neg_id = idx
-								tmp = token_list[pos_id]
-								token_list[pos_id] = token_list[neg_id]
-								token_list[neg_id] = tmp
-								dev_premise_inv.append(" ".join(token_list))
-							dev_premise = dev_premise_inv
+                                for idx in range(len(pred_batch)):
+                                    pred_index = pred_batch[idx]
+                                    pred_index = 1 if pred_index in [1,2] else 0
+                                    pred_class = scale_class[pred_index]
 
-						print(f"test dataset: {test_type}, from {dev_path}")
-						print(f"test model from: {model_path}")
-						print(f"save to: {save_path}")
-						dev_encoded = tokenizer(dev_premise, dev_hypo, truncation=True, padding='max_length', max_length=128)
-						dev_dataset = ScaleDataset(dev_encoded,dev_label)
-						data_loader = DataLoader(dev_dataset,batch_size=bs_size,shuffle=False)	
+                                    pred.append(pred_class)
+                        result = list(zip(dev_premise,dev_hypo,dev_label,pred))
 
-						acc = 0
-						pred = []
-
-						for i, batch in enumerate(data_loader):
-							with torch.no_grad():
-								input_ids = batch['input_ids'].to(device)
-								attention_mask = batch['attention_mask'].to(device)
-								labels = batch['labels'].to(device)
-								if 'token_type_ids' in batch:
-									token_type_ids = batch['token_type_ids'].to(device)
-									outputs = model_mnli(input_ids, attention_mask=attention_mask,token_type_ids=token_type_ids)
-								else:
-									outputs = model_mnli(input_ids, attention_mask=attention_mask)
-								logits = outputs['logits']
-								output = logits.detach().cpu()
-								
-								poss = torch.softmax(output,dim=1).tolist()
-								pred_batch = np.argmax(poss,axis=1)
-
-								for idx in range(len(pred_batch)):
-									pred_index = pred_batch[idx]
-									pred_index = 1 if pred_index in [1,2] else 0
-									pred_class = scale_class[pred_index]
-
-									pred.append(pred_class)
-						result = list(zip(dev_premise,dev_hypo,dev_label,pred))
-
-						with open(f'{save_path}/{test_type}','w') as f:
-							for pair in result:
-								if pair[2] == -2:
-									text = [pair[0],pair[1],'discard',pair[3]]
-								else:
-									text = [pair[0],pair[1],scale_class[pair[2]],pair[3]]
-								text = "\t".join(text)
-								f.write(text+"\n")
+                        with open(f'{save_path}/{test_type}','w') as f:
+                            for pair in result:
+                                if pair[2] == -2:
+                                    text = [pair[0],pair[1],'discard',pair[3]]
+                                else:
+                                    text = [pair[0],pair[1],scale_class[pair[2]],pair[3]]
+                                text = "\t".join(text)
+                                f.write(text+"\n")
