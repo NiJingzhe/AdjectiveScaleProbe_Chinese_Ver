@@ -1,0 +1,7 @@
+superlative_zh: 0.474
+dimension_zh: 0.976
+comparative_zh: 0.488
+negation_zh: 0.071
+diminisher_zh: 0.429
+argument_zh: 0.992
+booster_zh: 0.544

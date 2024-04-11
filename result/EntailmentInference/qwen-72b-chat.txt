@@ -1,0 +1,8 @@
+argument: 0.892
+booster: 0.518
+ordering: 0.563
+dimension: 0.948
+diminisher: 0.422
+negation: 0.476
+superlative: 0.613
+comparative: 0.55
